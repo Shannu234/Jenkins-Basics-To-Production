@@ -25,13 +25,20 @@ pipeline {
 
                     echo "Finding pom.xml:"
                     find "$WORKSPACE" -type f -name pom.xml -print
+
+                    echo "Checking Dockerfile and deployment manifest:"
+                    find "$WORKSPACE" -maxdepth 4 \
+                    \\( -name Dockerfile -o -name deploy-svc.yaml \\) -print
                 '''
             }
         }
 
         stage('Trivy FS Scan') {
             steps {
-                sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
+                sh '''
+                    trivy fs --exit-code 1 \
+                    --severity HIGH,CRITICAL .
+                '''
             }
         }
 
@@ -47,17 +54,22 @@ pipeline {
                         error "pom.xml not found in Jenkins workspace!"
                     }
 
-                    def projectDir = pomPath.substring(0, pomPath.lastIndexOf('/') + 1)
+                    def projectDir = pomPath.substring(
+                        0, pomPath.lastIndexOf('/') + 1
+                    )
 
                     echo "Maven project directory: ${projectDir}"
 
                     dir(projectDir) {
                         withCredentials([
-                            string(credentialsId: 'sonarqube-token',
-                                   variable: 'SONAR_TOKEN')
+                            string(
+                                credentialsId: 'sonarqube-token',
+                                variable: 'SONAR_TOKEN'
+                            )
                         ]) {
                             sh '''
-                                mvn clean verify sonar:sonar \
+                                mvn clean verify \
+                                org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar \
                                 -Dsonar.projectKey=gate-sonargate-demoproject \
                                 -Dsonar.host.url=http://${SONAR_IP}:9000 \
                                 -Dsonar.token="${SONAR_TOKEN}" \
@@ -73,7 +85,8 @@ pipeline {
             steps {
                 sh '''
                     aws ecr get-login-password --region ap-south-1 |
-                    docker login --username AWS --password-stdin "$ECR_REGISTRY"
+                    docker login --username AWS \
+                    --password-stdin "$ECR_REGISTRY"
                 '''
             }
         }

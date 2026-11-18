@@ -9,6 +9,21 @@ pipeline {
         IMAGE_REPO = "${ECR_REGISTRY}/cwvj-devsecops-demo"
     }
     stages {
+        stage('Check Project Structure') {
+            steps {
+                sh '''
+                    echo "Current workspace:"
+                    pwd
+
+                    echo "Workspace files:"
+                    ls -la
+
+                    echo "Finding pom.xml:"
+                    find . -name pom.xml -print
+                '''
+            }
+        }
+    stages {
         stage('Trivy FS Scan') {
             steps {
                 sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'

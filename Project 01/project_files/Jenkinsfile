@@ -24,7 +24,7 @@ pipeline {
                     ls -la
 
                     echo "Finding pom.xml:"
-                    find . -name pom.xml -print
+                    find "$WORKSPACE" -type f -name pom.xml -print
                 '''
             }
         }
@@ -37,17 +37,34 @@ pipeline {
 
         stage('Build & Sonar') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'sonarqube-token',
-                           variable: 'SONAR_TOKEN')
-                ]) {
-                    sh '''
-                        mvn clean verify sonar:sonar \
-                        -Dsonar.projectKey=gate-sonargate-demoproject \
-                        -Dsonar.host.url=http://${SONAR_IP}:9000 \
-                        -Dsonar.token="${SONAR_TOKEN}" \
-                        -Dsonar.qualitygate.wait=true
-                    '''
+                script {
+                    def pomPath = sh(
+                        script: "find . -type f -name pom.xml -print -quit",
+                        returnStdout: true
+                    ).trim()
+
+                    if (!pomPath) {
+                        error "pom.xml not found in Jenkins workspace!"
+                    }
+
+                    def projectDir = pomPath.substring(0, pomPath.lastIndexOf('/') + 1)
+
+                    echo "Maven project directory: ${projectDir}"
+
+                    dir(projectDir) {
+                        withCredentials([
+                            string(credentialsId: 'sonarqube-token',
+                                   variable: 'SONAR_TOKEN')
+                        ]) {
+                            sh '''
+                                mvn clean verify sonar:sonar \
+                                -Dsonar.projectKey=gate-sonargate-demoproject \
+                                -Dsonar.host.url=http://${SONAR_IP}:9000 \
+                                -Dsonar.token="${SONAR_TOKEN}" \
+                                -Dsonar.qualitygate.wait=true
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -65,6 +82,7 @@ pipeline {
             steps {
                 sh '''
                     export DOCKER_BUILDKIT=0
+
                     docker build --platform linux/amd64 \
                     -t "$IMAGE_REPO:$BUILD_NUMBER" \
                     -t "$IMAGE_REPO:latest" .
@@ -95,6 +113,7 @@ pipeline {
             steps {
                 sh '''
                     sed -i "s|image:.*|image: $IMAGE_REPO:$BUILD_NUMBER|g" deploy-svc.yaml
+
                     echo "Updated deployment image:"
                     grep "image:" deploy-svc.yaml
                 '''

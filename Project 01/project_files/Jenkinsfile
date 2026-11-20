@@ -97,8 +97,10 @@ pipeline {
                     export DOCKER_BUILDKIT=0
 
                     docker build --platform linux/amd64 \
+                    -f "Project 01/project_files/Dockerfile" \
                     -t "$IMAGE_REPO:$BUILD_NUMBER" \
-                    -t "$IMAGE_REPO:latest" .
+                    -t "$IMAGE_REPO:latest" \
+                    "Project 01/java-maven"
                 '''
             }
         }

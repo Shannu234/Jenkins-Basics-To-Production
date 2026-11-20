@@ -3,17 +3,17 @@ kind: ClusterConfig
 
 metadata:
   name: cwvj-devsecops-eks
-  region: ap-south-1
-  version: "1.32"
+  region: us-east-1
+  version: "1.36"
   tags:
-    owner: cloudwithvarjosh
+    owner: shanmukh
     environment: training
-    project: cwvj-devsecops-demo
+    project: devsecops-demo
     purpose: youtube-labs
 
 availabilityZones:
-  - ap-south-1a
-  - ap-south-1b
+  - us-east-1a
+  - us-east-1b
 
 iam:
   withOIDC: true
@@ -29,7 +29,7 @@ managedNodeGroups:
 
     ssh:
       allow: true
-      publicKeyName: cwvj-sj-mumbai   # your EC2 key pair name
+      publicKeyName: varjosh   # your EC2 key pair name
 
     iam:
       withAddonPolicies:

@@ -106,12 +106,16 @@ pipeline {
         }
 
         stage('Trivy Image Scan') {
-            steps {
-                sh '''
-                    trivy image --exit-code 1 \
-                    --severity HIGH,CRITICAL \
-                    "$IMAGE_REPO:$BUILD_NUMBER"
-                '''
+    steps {
+        sh '''
+            mkdir -p "$WORKSPACE/.trivy-tmp"
+            mkdir -p "$WORKSPACE/.trivy-cache"
+
+            TMPDIR="$WORKSPACE/.trivy-tmp" trivy image \
+              --cache-dir "$WORKSPACE/.trivy-cache" \
+              --exit-code 1 \
+              --severity HIGH,CRITICAL \
+              462819606004.dkr.ecr.us-east-1.amazonaws.com/project1-demo:19
             }
         }
 

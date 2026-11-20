@@ -36,8 +36,14 @@ pipeline {
         stage('Trivy FS Scan') {
             steps {
                 sh '''
-                    trivy fs --exit-code 1 \
-                    --severity HIGH,CRITICAL .
+                    mkdir -p "$WORKSPACE/.trivy-tmp"
+                    mkdir -p "$WORKSPACE/.trivy-cache"
+
+                    TMPDIR="$WORKSPACE/.trivy-tmp" trivy fs \
+                      --cache-dir "$WORKSPACE/.trivy-cache" \
+                      --exit-code 1 \
+                      --severity HIGH,CRITICAL \
+                      .
                 '''
             }
         }
@@ -86,7 +92,7 @@ pipeline {
                 sh '''
                     aws ecr get-login-password --region us-east-1 |
                     docker login --username AWS \
-                    --password-stdin "462819606004.dkr.ecr.us-east-1.amazonaws.com"
+                    --password-stdin "$ECR_REGISTRY"
                 '''
             }
         }
@@ -106,16 +112,17 @@ pipeline {
         }
 
         stage('Trivy Image Scan') {
-    steps {
-        sh '''
-            mkdir -p "$WORKSPACE/.trivy-tmp"
-            mkdir -p "$WORKSPACE/.trivy-cache"
+            steps {
+                sh '''
+                    mkdir -p "$WORKSPACE/.trivy-tmp"
+                    mkdir -p "$WORKSPACE/.trivy-cache"
 
-            TMPDIR="$WORKSPACE/.trivy-tmp" trivy image \
-              --cache-dir "$WORKSPACE/.trivy-cache" \
-              --exit-code 1 \
-              --severity HIGH,CRITICAL \
-              462819606004.dkr.ecr.us-east-1.amazonaws.com/project1-demo:19
+                    TMPDIR="$WORKSPACE/.trivy-tmp" trivy image \
+                      --cache-dir "$WORKSPACE/.trivy-cache" \
+                      --exit-code 1 \
+                      --severity HIGH,CRITICAL \
+                      "$IMAGE_REPO:$BUILD_NUMBER"
+                '''
             }
         }
 
@@ -130,40 +137,42 @@ pipeline {
 
         stage('Update Deployment') {
             steps {
-                sh '''
-                    sed -i "s|image:.*|image: $IMAGE_REPO:$BUILD_NUMBER|g" deploy-svc.yaml
+                dir('Project 01/project_files') {
+                    sh '''
+                        sed -i "s|image:.*|image: $IMAGE_REPO:$BUILD_NUMBER|g" deploy-svc.yaml
 
-                    echo "Updated deployment image:"
-                    grep "image:" deploy-svc.yaml
-                '''
+                        echo "Updated deployment image:"
+                        grep "image:" deploy-svc.yaml
+                    '''
+                }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh '''
-                    #!/bin/bash -l
+                dir('Project 01/project_files') {
+                    sh '''
+                        aws eks update-kubeconfig \
+                          --region ap-south-1 \
+                          --name cwvj-devsecops-eks \
+                          --kubeconfig /home/jenkins/.kube/config
 
-                    aws eks update-kubeconfig \
-                      --region ap-south-1 \
-                      --name cwvj-devsecops-eks \
-                      --kubeconfig /home/jenkins/.kube/config
+                        kubectl create ns cwvj-devsecops \
+                          --dry-run=client -o yaml | kubectl apply -f -
 
-                    kubectl create ns cwvj-devsecops \
-                      --dry-run=client -o yaml | kubectl apply -f -
+                        kubectl apply -f deploy-svc.yaml
 
-                    kubectl apply -f deploy-svc.yaml
-
-                    kubectl rollout status \
-                      -n cwvj-devsecops \
-                      deployment/cwvj-devsecops-demo \
-                      --timeout=60s || {
-                        kubectl rollout undo \
+                        kubectl rollout status \
                           -n cwvj-devsecops \
-                          deployment/cwvj-devsecops-demo || true
-                        exit 1
-                    }
-                '''
+                          deployment/cwvj-devsecops-demo \
+                          --timeout=60s || {
+                            kubectl rollout undo \
+                              -n cwvj-devsecops \
+                              deployment/cwvj-devsecops-demo || true
+                            exit 1
+                        }
+                    '''
+                }
             }
         }
     }
@@ -182,4 +191,3 @@ pipeline {
         }
     }
 }
-
